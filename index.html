@@ -943,7 +943,14 @@
   var __el=document.getElementById('app-data'); var __txt=__el?__el.textContent.trim():'';
   if(__txt){ __start(JSON.parse(__txt)); }
   else {
-    fetch('data.json?v='+Date.now(),{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }).then(__start)
+    var __get=function(u){ return fetch(u+'?v='+Date.now(),{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error(u+' '+r.status); return r.json(); }); };
+    __get('data.json').then(function(core){
+      var parts=core.parts||[]; delete core.parts;
+      return Promise.all(parts.map(__get)).then(function(res){
+        res.forEach(function(p){ Object.keys(p).forEach(function(k){ core[k]=Array.isArray(p[k])?(core[k]||[]).concat(p[k]):p[k]; }); });
+        return core;
+      });
+    }).then(__start)
     .catch(function(e){ document.body.insertAdjacentHTML('afterbegin','<p style="padding:24px;font-family:sans-serif">No se pudieron cargar los datos del panel ('+e.message+'). Recargue la página.</p>'); });
   }
 })();
