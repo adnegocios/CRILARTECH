@@ -231,7 +231,9 @@
     text-transform:uppercase; letter-spacing:.03em; padding:3px 8px 6px 0; border-bottom:1.5px solid var(--ink-2);
   }
   .egresos-table td{padding:3.5px 8px 3.5px 0; color:var(--ink); border-bottom:1px solid var(--border);}
-  .egresos-table th:last-child, .egresos-table td:last-child{text-align:right; padding-right:0;}
+  .egresos-table th:not(:first-child), .egresos-table td:not(:first-child){text-align:right;}
+  .egresos-table th:last-child, .egresos-table td:last-child{padding-right:0;}
+  .egresos-table th:nth-child(2), .egresos-table td:nth-child(2){padding-right:14px;}
   .egresos-table tr.total-row td{font-weight:800; border-top:1.5px solid var(--ink-2); border-bottom:none;}
 
   /* ---------- Siembra de nauplios: tabla de detalle ---------- */
@@ -573,12 +575,14 @@
     return div;
   }
 
-  function egresosTable(el, entries){
+  function egresosTable(el, entries, grandTotal){
     const total = entries.reduce((s,e)=>s+e.value,0);
-    el.innerHTML = `<thead><tr><th>Egresos</th><th>Suma de VALOR</th></tr></thead>
+    const base = grandTotal || total;
+    const pct = v => base ? fmtPct1(v/base) : '0%';
+    el.innerHTML = `<thead><tr><th>Egresos</th><th>Suma de VALOR</th><th>% del total</th></tr></thead>
       <tbody>
-        ${entries.map(e => `<tr><td>${e.label}</td><td class="num">${fmtNum2(e.value)}</td></tr>`).join('')}
-        <tr class="total-row"><td>Total</td><td class="num">${fmtNum2(total)}</td></tr>
+        ${entries.map(e => `<tr><td>${e.label}</td><td class="num">${fmtNum2(e.value)}</td><td class="num">${pct(e.value)}</td></tr>`).join('')}
+        <tr class="total-row"><td>Total</td><td class="num">${fmtNum2(total)}</td><td class="num">${pct(total)}</td></tr>
       </tbody>`;
   }
 
@@ -851,8 +855,8 @@
       rows.forEach(r => m.set(r.egresos, (m.get(r.egresos)||0) + r.valor));
       return Array.from(m, ([label,value])=>({label,value})).sort((a,b)=>a.label.localeCompare(b.label,'es',{numeric:true}));
     }
-    egresosTable(document.getElementById('tabla-costos'), groupSum(costos));
-    egresosTable(document.getElementById('tabla-gastos'), groupSum(gastos));
+    egresosTable(document.getElementById('tabla-costos'), groupSum(costos), totalEgresos);
+    egresosTable(document.getElementById('tabla-gastos'), groupSum(gastos), totalEgresos);
   }
 
   // ================= SIEMBRA DE NAUPLIOS =================
