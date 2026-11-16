@@ -248,6 +248,16 @@
   .detalle-table tr.total-row td{font-weight:800; border-top:1.5px solid var(--ink-2); border-bottom:none;}
   .detalle-table td.wrap{white-space:normal; overflow-wrap:anywhere; min-width:110px;}
 
+  /* ---------- Alimentación ---------- */
+  .ali-matrix{border-collapse:separate; border-spacing:0; font-size:12px; min-width:760px;}
+  .ali-matrix th{font-weight:700; color:var(--ink-2); font-size:11px; text-align:center; vertical-align:bottom; padding:3px 6px 6px; border-bottom:1.5px solid var(--ink-2); white-space:nowrap; background:var(--surface);}
+  .ali-matrix th small{display:block; font-weight:600; color:var(--muted); text-transform:none; letter-spacing:0;}
+  .ali-matrix td{padding:3px 6px; text-align:center; border-bottom:1px solid var(--border); color:var(--ink); white-space:nowrap;}
+  .ali-matrix td.empty{color:var(--baseline);}
+  .ali-matrix th:first-child, .ali-matrix td:first-child{position:sticky; left:0; text-align:left; background:var(--surface); font-weight:700; min-width:128px; z-index:1;}
+  .ali-matrix th.tot, .ali-matrix td.tot{font-weight:800; border-left:1.5px solid var(--border);}
+  .ali-chips{display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px;}
+
   /* ---------- legend ---------- */
   .legend{display:flex; gap:16px; flex-wrap:wrap; margin:0 0 8px; font-size:12.5px; color:var(--ink-2);}
   .legend span{display:inline-flex; align-items:center; gap:6px;}
@@ -285,6 +295,7 @@
     <button class="tab-btn" role="tab" data-tab="presupuesto" aria-selected="false">Presupuesto</button>
     <button class="tab-btn" role="tab" data-tab="produccion" aria-selected="false">Producción</button>
     <button class="tab-btn" role="tab" data-tab="nauplios" aria-selected="false">Siembra de nauplios</button>
+    <button class="tab-btn" role="tab" data-tab="alimentacion" aria-selected="false">Alimentación</button>
   </nav>
 
   <main>
@@ -443,6 +454,59 @@
         </div>
       </div>
     </section>
+
+    <!-- ================= ALIMENTACION ================= -->
+    <section id="tab-alimentacion" class="tabpanel" hidden>
+      <div class="tab-layout">
+        <div class="tab-sidebar">
+          <div class="filter-block">
+            <span class="flabel">Mes</span>
+            <div class="checklist" id="ali-meses"></div>
+          </div>
+          <div class="filter-block">
+            <span class="flabel">Estadio</span>
+            <div class="checklist" id="ali-estadios"></div>
+          </div>
+          <div class="filter-block" id="ali-salas-block" hidden>
+            <span class="flabel">Sala</span>
+            <div class="checklist" id="ali-salas"></div>
+          </div>
+          <div class="filter-block" id="ali-tanques-block" hidden>
+            <span class="flabel">Tanque</span>
+            <div class="checklist" id="ali-tanques"></div>
+          </div>
+        </div>
+
+        <div class="tab-main">
+          <div class="kpi-grid" id="ali-kpis"></div>
+
+          <div class="panel">
+            <h2>Aplicación diaria por producto</h2>
+            <p class="panel-sub">Elija los productos que quiere comparar. Cantidades tal como se anotan en la hoja de registro.</p>
+            <div class="ali-chips" id="ali-chips"></div>
+            <div class="chart-wrap" style="height:280px;"><canvas id="chart-ali-dia"></canvas></div>
+          </div>
+
+          <div class="panel">
+            <h2>Total aplicado por producto</h2>
+            <p class="panel-sub">Suma del periodo filtrado. Las unidades siguen la hoja de registro (productos con "(Lt)" en litros), por eso no se suman entre sí.</p>
+            <div class="chart-wrap" id="ali-total-wrap" style="height:300px;"><canvas id="chart-ali-total"></canvas></div>
+          </div>
+
+          <div class="panel">
+            <h2>Productos por día</h2>
+            <p class="panel-sub">Cantidad aplicada cada día, con el estadio del cultivo. Los tonos más intensos marcan los días de mayor dosis de cada producto.</p>
+            <div class="table-scroll"><table class="ali-matrix" id="tabla-ali-matriz"></table></div>
+          </div>
+
+          <div class="panel">
+            <h2>Parámetros del cultivo</h2>
+            <p class="panel-sub">Nivel de agua, recambio, agua y algas registrados cada día.</p>
+            <div class="table-scroll"><table class="detalle-table" id="tabla-ali-params"></table></div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -595,6 +659,7 @@
       salas: new Set(Array.from(new Set(DATA.sembrado.map(r=>r.sala)))),
       labs: new Set(Array.from(new Set(DATA.sembrado.map(r=>r.laboratorio)))),
     },
+    ali: { meses: null, estadios: null, salas: null, tanques: null, prods: null },
     nau: {
       anios: new Set(DATA.nauplios.map(r=>r.anio)),
       meses: new Set(DATA.nauplios.map(r=>r.mes)),
@@ -927,6 +992,122 @@
       `</tbody>`;
   }
 
+  // ================= ALIMENTACION =================
+  function renderAlimentacion(){
+    const st = state.ali;
+    const DIAS = DATA.alimentacion_dias || [];
+    const ALI = DATA.alimentacion || [];
+    const esc = t => String(t==null?'':t).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const dayKey = r => `${r.fecha}|${r.sala||''}|${r.tanque||''}`;
+    const fmtD = iso => { const [y,m,d] = iso.split('-'); return `${parseInt(d,10)} ${MESES[parseInt(m,10)-1]}`; };
+    const fmtDL = iso => { const [y,m,d] = iso.split('-'); return `${parseInt(d,10)} ${MESES[parseInt(m,10)-1]} ${y}`; };
+    const fmtQ = n => n==null ? '' : (Math.round(n*100)/100).toLocaleString('es-EC',{maximumFractionDigits:2});
+
+    if (!DIAS.length){
+      document.getElementById('ali-kpis').innerHTML = '<p style="color:var(--muted)">Aún no hay registros de alimentación.</p>';
+      return;
+    }
+    const mesesDisp = Array.from(new Set(DIAS.map(r=>r.mes))).sort((a,b)=>a-b);
+    const estDisp = []; DIAS.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(r=>{ if(r.estadio && !estDisp.includes(r.estadio)) estDisp.push(r.estadio); });
+    const salasDisp = Array.from(new Set(DIAS.map(r=>r.sala).filter(Boolean)));
+    const tanquesDisp = Array.from(new Set(DIAS.map(r=>r.tanque).filter(Boolean)));
+    if (!st.meses){ st.meses = new Set(mesesDisp); st.estadios = new Set(estDisp); st.salas = new Set(salasDisp); st.tanques = new Set(tanquesDisp); }
+    // lo que aparezca nuevo en los datos entra marcado por defecto
+    mesesDisp.forEach(m=>{ if(!st._m || !st._m.has(m)) st.meses.add(m); });
+    estDisp.forEach(e=>{ if(!st._e || !st._e.has(e)) st.estadios.add(e); });
+    salasDisp.forEach(s=>{ if(!st._s || !st._s.has(s)) st.salas.add(s); });
+    tanquesDisp.forEach(t=>{ if(!st._t || !st._t.has(t)) st.tanques.add(t); });
+    st._m = new Set(mesesDisp); st._e = new Set(estDisp); st._s = new Set(salasDisp); st._t = new Set(tanquesDisp);
+
+    checklist(document.getElementById('ali-meses'), mesesDisp.map(m=>({value:m,label:MESES[m-1]})), st.meses, renderAlimentacion, {allToggle:true});
+    checklist(document.getElementById('ali-estadios'), estDisp.map(e=>({value:e,label:e})), st.estadios, renderAlimentacion, {allToggle:true});
+    document.getElementById('ali-salas-block').style.display = salasDisp.length ? '' : 'none';
+    document.getElementById('ali-tanques-block').style.display = tanquesDisp.length ? '' : 'none';
+    if (salasDisp.length) checklist(document.getElementById('ali-salas'), salasDisp.map(s=>({value:s,label:String(s)})), st.salas, renderAlimentacion, {allToggle:true});
+    if (tanquesDisp.length) checklist(document.getElementById('ali-tanques'), tanquesDisp.map(t=>({value:t,label:String(t)})), st.tanques, renderAlimentacion, {allToggle:true});
+
+    const okDia = r => st.meses.has(r.mes) && (!r.estadio || st.estadios.has(r.estadio)) && (!r.sala || st.salas.has(r.sala)) && (!r.tanque || st.tanques.has(r.tanque));
+    const dias = DIAS.filter(okDia).sort((a,b)=> a.fecha.localeCompare(b.fecha) || String(a.sala).localeCompare(String(b.sala)) || String(a.tanque).localeCompare(String(b.tanque)));
+    const keys = dias.map(dayKey);
+    const keySet = new Set(keys);
+    const reg = ALI.filter(r => keySet.has(dayKey(r)));
+
+    // totales por producto
+    const prodMap = new Map();
+    reg.forEach(r => {
+      let p = prodMap.get(r.producto);
+      if (!p){ p = { nombre:r.producto, orden:r.orden||999, total:0, dias:new Set(), max:0 }; prodMap.set(r.producto,p); }
+      p.total += r.cantidad; p.dias.add(dayKey(r)); if (r.cantidad > p.max) p.max = r.cantidad;
+    });
+    const prods = Array.from(prodMap.values()).sort((a,b)=>a.orden-b.orden);
+    const prodsByTotal = prods.slice().sort((a,b)=>b.total-a.total);
+
+    // KPIs
+    const kpis = document.getElementById('ali-kpis'); kpis.innerHTML = '';
+    const nDias = dias.length;
+    const rango = nDias ? (dias[0].fecha===dias[nDias-1].fecha ? fmtDL(dias[0].fecha) : `${fmtD(dias[0].fecha)} – ${fmtDL(dias[nDias-1].fecha)}`) : 'sin datos';
+    kpis.appendChild(kpiCard('Días registrados', fmtInt(nDias), rango, '', true));
+    kpis.appendChild(kpiCard('Productos aplicados', fmtInt(prods.length), 'distintos en el periodo'));
+    if (prodsByTotal.length) kpis.appendChild(kpiCard('Mayor cantidad', esc(prodsByTotal[0].nombre), fmtQ(prodsByTotal[0].total) + ' acumulado'));
+    const conNivel = dias.filter(r=>r.nivel!=null);
+    if (conNivel.length){ const u = conNivel[conNivel.length-1]; kpis.appendChild(kpiCard('Nivel de agua', fmtQ(u.nivel), `último registro · ${fmtD(u.fecha)}`)); }
+
+    // chips de producto para el gráfico diario
+    if (!st.prods) st.prods = new Set(prodsByTotal.slice(0,4).map(p=>p.nombre));
+    const chips = document.getElementById('ali-chips'); chips.innerHTML = '';
+    prods.forEach(p => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'chip' + (st.prods.has(p.nombre) ? ' active' : ''); b.textContent = p.nombre;
+      b.addEventListener('click', () => { if (st.prods.has(p.nombre)) st.prods.delete(p.nombre); else st.prods.add(p.nombre); renderAlimentacion(); });
+      chips.appendChild(b);
+    });
+
+    const COLORS = ['--s1','--s2','--s3','--s4','--s5','--accent','--lab-sj','--muted'].map(cssVar);
+    const labels = dias.map(r => [fmtD(r.fecha), r.estadio || '']);
+    const sel = prods.filter(p => st.prods.has(p.nombre));
+    destroyChart('aliDia');
+    charts.aliDia = new Chart(document.getElementById('chart-ali-dia'), {
+      type:'line',
+      data:{ labels, datasets: sel.map((p,i) => ({
+        label:p.nombre, borderColor:COLORS[i%COLORS.length], backgroundColor:COLORS[i%COLORS.length], borderWidth:2, tension:0.25, pointRadius:3, spanGaps:false,
+        data: dias.map(d => { const r = reg.find(x => x.producto===p.nombre && dayKey(x)===dayKey(d)); return r ? r.cantidad : null; }) })) },
+      options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+        plugins:{ ...baseLegend(true) }, scales: baseScales() }
+    });
+
+    // total por producto (barras horizontales)
+    const wrap = document.getElementById('ali-total-wrap');
+    wrap.style.height = Math.max(260, prodsByTotal.length*22 + 50) + 'px';
+    destroyChart('aliTotal');
+    charts.aliTotal = new Chart(document.getElementById('chart-ali-total'), {
+      type:'bar',
+      data:{ labels: prodsByTotal.map(p=>p.nombre), datasets:[{ data: prodsByTotal.map(p=>p.total), backgroundColor: cssVar('--accent'), borderRadius:4, maxBarThickness:16 }] },
+      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => { const p = prodsByTotal[c.dataIndex]; return ` ${fmtQ(p.total)} · ${p.dias.size} ${p.dias.size===1?'día':'días'} de uso`; } } } },
+        scales:{ x:{ grid:{color:cssVar('--grid')}, ticks:{color:cssVar('--ink-2')}, beginAtZero:true }, y:{ grid:{display:false}, ticks:{color:cssVar('--ink-2'), font:{size:11}} } } }
+    });
+
+    // matriz producto x día
+    const head = dias.map(d => `<th>${esc(fmtD(d.fecha))}<small>${esc(d.estadio||'')}${d.tanque?` · T${esc(d.tanque)}`:''}</small></th>`).join('');
+    const accent = cssVar('--accent');
+    const body = prods.map(p => {
+      const cells = dias.map(d => { const r = reg.find(x => x.producto===p.nombre && dayKey(x)===dayKey(d));
+        if (!r) return '<td class="empty">·</td>';
+        const a = 0.10 + 0.40*(p.max ? r.cantidad/p.max : 0);
+        return `<td class="num" style="background:${hexToRgba(accent,a)}">${fmtQ(r.cantidad)}</td>`; }).join('');
+      return `<tr><td>${esc(p.nombre)}</td>${cells}<td class="num tot">${fmtQ(p.total)}</td><td class="num">${p.dias.size}</td></tr>`;
+    }).join('');
+    document.getElementById('tabla-ali-matriz').innerHTML =
+      `<thead><tr><th>Producto</th>${head}<th class="tot">Total</th><th>Días de uso</th></tr></thead><tbody>` +
+      (prods.length ? body : `<tr><td colspan="${nDias+3}" style="color:var(--muted);padding:12px 0;">Sin registros para los filtros seleccionados.</td></tr>`) + `</tbody>`;
+
+    // parámetros por día
+    document.getElementById('tabla-ali-params').innerHTML =
+      `<thead><tr><th>Fecha</th><th>Estadio</th><th class="r">Sala</th><th class="r">Tanque</th><th class="r">Conteo</th><th class="r">PL/GR</th><th class="r">Nivel</th><th class="r">Recambio</th><th class="r">H2O dulce</th><th class="r">H2O salada</th><th class="r">Algas</th></tr></thead><tbody>` +
+      (dias.length ? dias.map(d => `<tr><td>${esc(fmtDL(d.fecha))}</td><td>${esc(d.estadio)}</td><td class="r">${esc(d.sala)}</td><td class="r">${esc(d.tanque)}</td><td class="r num">${fmtQ(d.conteo)}</td><td class="r num">${fmtQ(d.pl_gr)}</td><td class="r num">${fmtQ(d.nivel)}</td><td class="r num">${fmtQ(d.recambio)}</td><td class="r num">${fmtQ(d.h2o_dulce)}</td><td class="r num">${fmtQ(d.h2o_salada)}</td><td class="r num">${fmtQ(d.algas)}</td></tr>`).join('')
+        : `<tr><td colspan="11" style="color:var(--muted);padding:12px 0;">Sin registros para los filtros seleccionados.</td></tr>`) + `</tbody>`;
+  }
+
   // ---------------- init ----------------
   function render(){
     renderVentas();
@@ -934,6 +1115,7 @@
     renderPresupuesto();
     renderProduccion();
     renderNauplios();
+    renderAlimentacion();
   }
   setFechaCorteBadge();
   render();
