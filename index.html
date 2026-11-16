@@ -488,12 +488,6 @@
           </div>
 
           <div class="panel">
-            <h2>Total aplicado por producto</h2>
-            <p class="panel-sub">Suma del periodo filtrado. Las unidades siguen la hoja de registro (productos con "(Lt)" en litros), por eso no se suman entre sí.</p>
-            <div class="chart-wrap" id="ali-total-wrap" style="height:300px;"><canvas id="chart-ali-total"></canvas></div>
-          </div>
-
-          <div class="panel">
             <h2>Productos por día</h2>
             <p class="panel-sub">Cantidad aplicada cada día, con el estadio del cultivo. Los tonos más intensos marcan los días de mayor dosis de cada producto.</p>
             <div class="table-scroll"><table class="ali-matrix" id="tabla-ali-matriz"></table></div>
@@ -1073,18 +1067,6 @@
         data: dias.map(d => { const r = reg.find(x => x.producto===p.nombre && dayKey(x)===dayKey(d)); return r ? r.cantidad : null; }) })) },
       options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
         plugins:{ ...baseLegend(true) }, scales: baseScales() }
-    });
-
-    // total por producto (barras horizontales)
-    const wrap = document.getElementById('ali-total-wrap');
-    wrap.style.height = Math.max(260, prodsByTotal.length*22 + 50) + 'px';
-    destroyChart('aliTotal');
-    charts.aliTotal = new Chart(document.getElementById('chart-ali-total'), {
-      type:'bar',
-      data:{ labels: prodsByTotal.map(p=>p.nombre), datasets:[{ data: prodsByTotal.map(p=>p.total), backgroundColor: cssVar('--accent'), borderRadius:4, maxBarThickness:16 }] },
-      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => { const p = prodsByTotal[c.dataIndex]; return ` ${fmtQ(p.total)} · ${p.dias.size} ${p.dias.size===1?'día':'días'} de uso`; } } } },
-        scales:{ x:{ grid:{color:cssVar('--grid')}, ticks:{color:cssVar('--ink-2')}, beginAtZero:true }, y:{ grid:{display:false}, ticks:{color:cssVar('--ink-2'), font:{size:11}} } } }
     });
 
     // matriz producto x día
